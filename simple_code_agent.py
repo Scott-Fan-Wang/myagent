@@ -272,7 +272,8 @@ class CodeAgent:
         }
     ]
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", verbose: bool = True):
+    def __init__(self, base_url: str, api_key: str, model: str = "gpt-4-turbo-preview", verbose: bool = True):
+        self.base_url = base_url
         self.api_key = api_key
         self.model = model
         self.logger = Logger(verbose)
@@ -305,7 +306,7 @@ class CodeAgent:
 
     async def call_openai(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Make an async call to OpenAI API."""
-        url = "https://api.openai.com/v1/chat/completions"
+        url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -443,7 +444,8 @@ When you complete a task, summarize what was done."""
 async def main():
     """Main entry point."""
     # Get API key from environment or user input
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("API_KEY", "your-api-key-here")
+    base_url = os.environ.get("BASE_URL", "https://api.deepseek.com/v1")
 
     if not api_key:
         print("OpenAI API key not found in environment.")
@@ -454,10 +456,10 @@ async def main():
         sys.exit(1)
 
     # Get model from environment or use default
-    model = os.environ.get("OPENAI_MODEL", "gpt-4-turbo-preview")
+    model = os.environ.get("OPENAI_MODEL", "deepseek-chat")
 
     # Create and run agent
-    agent = CodeAgent(api_key=api_key, model=model, verbose=True)
+    agent = CodeAgent(base_url=base_url, api_key=api_key, model=model, verbose=True)
     await agent.run()
 
 
