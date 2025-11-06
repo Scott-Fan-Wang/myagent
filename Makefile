@@ -1,6 +1,6 @@
-# Makefile for Simple Code Agent (C++)
+# Makefile for Simple Code Agent (C++) - Using clang++
 
-CXX = g++
+CXX = clang++
 CXXFLAGS = -std=c++17 -Wall -Wextra -Wpedantic -O2
 LDFLAGS = -lpthread -lstdc++fs
 
@@ -16,13 +16,13 @@ all: $(TARGET)
 
 # Link the executable
 $(TARGET): $(OBJECTS)
-	@echo "Linking $(TARGET)..."
+	@echo "Linking $(TARGET) with clang++..."
 	$(CXX) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
 	@echo "Build complete: $(TARGET)"
 
 # Compile source files
 %.o: %.cpp $(HEADERS)
-	@echo "Compiling $<..."
+	@echo "Compiling $< with clang++..."
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Clean build artifacts
@@ -58,7 +58,7 @@ debug: clean $(TARGET)
 
 # Show help
 help:
-	@echo "Simple Code Agent - Makefile"
+	@echo "Simple Code Agent - Makefile (clang++ version)"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make            - Build the project"
@@ -70,6 +70,6 @@ help:
 	@echo "  make help       - Show this help message"
 	@echo ""
 	@echo "Environment variables:"
-	@echo "  CXX             - C++ compiler (default: g++)"
+	@echo "  CXX             - C++ compiler (default: clang++)"
 	@echo "  CXXFLAGS        - Compiler flags"
 	@echo "  LDFLAGS         - Linker flags"

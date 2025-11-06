@@ -11,6 +11,10 @@ import os
 import subprocess
 import sys
 import argparse
+import threading
+import select
+import termios
+import tty
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -282,6 +286,8 @@ class CodeAgent:
         self.conversation_history: List[Dict[str, Any]] = []
         self.file_tools = FileTools()
         self.shell_tools = ShellTools()
+        self.should_stop = False
+        self.keyboard_thread = None
 
     def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a tool based on its name and arguments."""
@@ -338,7 +344,7 @@ class CodeAgent:
 
         iteration = 0
 
-        while iteration < self.max_iterations:
+        while iteration < self.max_iterations and not self.should_stop:
             iteration += 1
 
             # Call OpenAI API
@@ -357,6 +363,10 @@ class CodeAgent:
 
                 # Execute each tool call
                 for tool_call in message["tool_calls"]:
+                    # Check if ESC was pressed before executing each tool
+                    if self.should_stop:
+                        return "[Agent stopped by user request]"
+                    
                     tool_name = tool_call["function"]["name"]
                     tool_args = json.loads(tool_call["function"]["arguments"])
 
@@ -385,7 +395,37 @@ class CodeAgent:
             else:
                 return "[Assistant provided no text response]"
 
-        return "[Max iterations reached - the assistant may need more steps to complete the task]"
+        if self.should_stop:
+            return "[Agent stopped by user request]"
+        else:
+            return "[Max iterations reached - the assistant may need more steps to complete the task]"
+
+    def _start_keyboard_monitor(self):
+        """Start a background thread to monitor keyboard input for ESC key."""
+        def monitor_esc():
+            # Save terminal settings
+            old_settings = termios.tcgetattr(sys.stdin)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                while not self.should_stop:
+                    if select.select([sys.stdin], [], [], 0.1)[0]:
+                        key = sys.stdin.read(1)
+                        if key == '\x1b':  # ESC key
+                            self.should_stop = True
+                            self.logger.log("ESC key detected - stopping agent", "INFO")
+                            break
+            finally:
+                # Restore terminal settings
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
+        self.keyboard_thread = threading.Thread(target=monitor_esc, daemon=True)
+        self.keyboard_thread.start()
+
+    def _stop_keyboard_monitor(self):
+        """Stop the keyboard monitoring thread."""
+        self.should_stop = True
+        if self.keyboard_thread and self.keyboard_thread.is_alive():
+            self.keyboard_thread.join(timeout=1.0)
 
     async def run(self):
         """Run the interactive CLI loop."""
@@ -396,6 +436,7 @@ class CodeAgent:
         print("  - Type your request and press Enter")
         print("  - Type 'exit' or 'quit' to exit")
         print("  - Type 'clear' to clear conversation history")
+        print("  - Press ESC key to stop current agent work")
         print("="*60 + "\n")
 
         # Add system prompt
@@ -411,6 +452,9 @@ When you complete a task, summarize what was done."""
 
         while True:
             try:
+                # Reset stop flag for new request
+                self.should_stop = False
+                
                 user_input = input("\n\033[1;34mYou:\033[0m ").strip()
 
                 if not user_input:
@@ -428,8 +472,14 @@ When you complete a task, summarize what was done."""
                     print("Conversation history cleared.")
                     continue
 
+                # Start keyboard monitoring for ESC key
+                self._start_keyboard_monitor()
+
                 # Process the message
                 response = await self.process_message(user_input)
+
+                # Stop keyboard monitoring
+                self._stop_keyboard_monitor()
 
                 # Print assistant response
                 print(f"\n\033[1;32mAssistant:\033[0m {response}")

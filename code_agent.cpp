@@ -889,7 +889,7 @@ const std::string Agent::TOOLS_JSON = R"TOOLS([
                 },
                 "timeout": {
                     "type": "integer",
-                    "description": "Timeout in seconds (default: 30)"
+                    "description": "Timeout in seconds (default: 300)"
                 }
             },
             "required": ["command"]
@@ -972,13 +972,13 @@ JsonValue Agent::executeToolInternal(const std::string& toolName,
             error.strings["error"] = "Missing required argument: command";
             return error;
         }
-        int timeout = 30;
+        int timeout = 300;
         auto timeoutIt = arguments.find("timeout");
         if (timeoutIt != arguments.end()) {
             try {
                 timeout = std::stoi(timeoutIt->second);
             } catch (...) {
-                timeout = 30;
+                timeout = 300;
             }
         }
         return shellTools_.runCommand(commandIt->second, timeout);
