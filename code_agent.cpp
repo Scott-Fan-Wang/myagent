@@ -899,8 +899,8 @@ const std::string Agent::TOOLS_JSON = R"TOOLS([
 ])TOOLS";
 
 Agent::Agent(const std::string& baseUrl, const std::string& apiKey,
-             const std::string& model, bool verbose)
-    : baseUrl_(baseUrl), apiKey_(apiKey), model_(model), logger_(verbose) {
+             const std::string& model, bool verbose, int maxIterations)
+    : baseUrl_(baseUrl), apiKey_(apiKey), model_(model), maxIterations_(maxIterations), logger_(verbose) {
 
     std::string systemPrompt = "You are a helpful coding assistant with access to file operations and shell commands. "
                                "You can read, write, and edit files, as well as execute shell commands. "
@@ -1086,10 +1086,9 @@ std::string Agent::processMessage(const std::string& userMessage) {
     userMsg.content = userMessage;
     conversationHistory_.push_back(userMsg);
 
-    const int maxIterations = 10;
     int iteration = 0;
 
-    while (iteration < maxIterations) {
+    while (iteration < maxIterations_) {
         iteration++;
 
         logger_.log("Calling OpenAI API (iteration " + std::to_string(iteration) + ")...", "INFO");
