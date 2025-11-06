@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+import argparse
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -272,10 +273,11 @@ class CodeAgent:
         }
     ]
 
-    def __init__(self, base_url: str, api_key: str, model: str = "gpt-4-turbo-preview", verbose: bool = True):
+    def __init__(self, base_url: str, api_key: str, model: str = "gpt-4-turbo-preview", verbose: bool = True, max_iterations: int = 99):
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
+        self.max_iterations = max_iterations
         self.logger = Logger(verbose)
         self.conversation_history: List[Dict[str, Any]] = []
         self.file_tools = FileTools()
@@ -334,10 +336,9 @@ class CodeAgent:
             "content": user_message
         })
 
-        max_iterations = 99  # Prevent infinite loops
         iteration = 0
 
-        while iteration < max_iterations:
+        while iteration < self.max_iterations:
             iteration += 1
 
             # Call OpenAI API
@@ -443,6 +444,12 @@ When you complete a task, summarize what was done."""
 
 async def main():
     """Main entry point."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Simple Code Agent - OpenAI powered coding assistant")
+    parser.add_argument("-m", "--max_iter", type=int, default=99,
+                        help="Maximum number of iterations (default: 99)")
+    args = parser.parse_args()
+
     # Get API key from environment or user input
     api_key = os.environ.get("API_KEY", "your-api-key-here")
     base_url = os.environ.get("BASE_URL", "https://api.deepseek.com/v1")
@@ -459,7 +466,7 @@ async def main():
     model = os.environ.get("OPENAI_MODEL", "deepseek-chat")
 
     # Create and run agent
-    agent = CodeAgent(base_url=base_url, api_key=api_key, model=model, verbose=True)
+    agent = CodeAgent(base_url=base_url, api_key=api_key, model=model, verbose=True, max_iterations=args.max_iter)
     await agent.run()
 
 

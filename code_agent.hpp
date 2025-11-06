@@ -84,7 +84,8 @@ public:
 class Agent {
 public:
     Agent(const std::string& baseUrl, const std::string& apiKey,
-          const std::string& model = "gpt-4-turbo-preview", bool verbose = true);
+          const std::string& model = "gpt-4-turbo-preview", bool verbose = true,
+          int maxIterations = 99);
 
     std::string processMessage(const std::string& userMessage);
     void run();
@@ -94,6 +95,7 @@ private:
     std::string baseUrl_;
     std::string apiKey_;
     std::string model_;
+    int maxIterations_;
     Logger logger_;
     std::vector<Message> conversationHistory_;
     FileTools fileTools_;
