@@ -122,6 +122,7 @@ public:
     static std::string extractObject(const std::string& json, const std::string& key);
     static std::vector<std::string> splitJsonArray(const std::string& jsonArray);
     static bool findString(const std::string& json, size_t& pos, const std::string& key, std::string& value);
+    static std::map<std::string, std::string> parseJsonObject(const std::string& json);
 };
 
 } // namespace CodeAgent
