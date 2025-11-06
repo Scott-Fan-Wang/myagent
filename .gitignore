@@ -39,3 +39,11 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.log
+
+# C++ build artifacts
+*.o
+*.out
+code_agent
+test_json_parser
+test_tools
+test_output.txt

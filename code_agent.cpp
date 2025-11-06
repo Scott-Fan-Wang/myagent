@@ -249,6 +249,125 @@ std::vector<std::string> JsonParser::splitJsonArray(const std::string& jsonArray
     return result;
 }
 
+std::map<std::string, std::string> JsonParser::parseJsonObject(const std::string& json) {
+    std::map<std::string, std::string> result;
+
+    // Remove outer braces if present
+    std::string content = json;
+    size_t start = content.find('{');
+    size_t end = content.rfind('}');
+    if (start != std::string::npos && end != std::string::npos) {
+        content = content.substr(start + 1, end - start - 1);
+    }
+
+    // Parse key-value pairs
+    size_t pos = 0;
+    bool escaped = false;
+    int braceCount = 0;
+    int bracketCount = 0;
+
+    while (pos < content.length()) {
+        // Skip whitespace
+        while (pos < content.length() && std::isspace(content[pos])) pos++;
+        if (pos >= content.length()) break;
+
+        // Expect a quoted key
+        if (content[pos] != '\"') {
+            pos++;
+            continue;
+        }
+
+        // Extract key
+        pos++; // skip opening quote
+        size_t keyStart = pos;
+        escaped = false;
+        while (pos < content.length()) {
+            if (escaped) {
+                escaped = false;
+            } else if (content[pos] == '\\') {
+                escaped = true;
+            } else if (content[pos] == '\"') {
+                break;
+            }
+            pos++;
+        }
+
+        std::string key = content.substr(keyStart, pos - keyStart);
+        key = unescape(key);
+        pos++; // skip closing quote
+
+        // Skip whitespace and colon
+        while (pos < content.length() && (std::isspace(content[pos]) || content[pos] == ':')) pos++;
+
+        // Extract value
+        std::string value;
+        if (pos < content.length()) {
+            if (content[pos] == '\"') {
+                // String value
+                pos++; // skip opening quote
+                size_t valueStart = pos;
+                escaped = false;
+                while (pos < content.length()) {
+                    if (escaped) {
+                        escaped = false;
+                    } else if (content[pos] == '\\') {
+                        escaped = true;
+                    } else if (content[pos] == '\"') {
+                        break;
+                    }
+                    pos++;
+                }
+                value = content.substr(valueStart, pos - valueStart);
+                value = unescape(value);
+                pos++; // skip closing quote
+            } else if (content[pos] == '{') {
+                // Object value
+                size_t objStart = pos;
+                braceCount = 1;
+                pos++;
+                while (pos < content.length() && braceCount > 0) {
+                    if (content[pos] == '{') braceCount++;
+                    else if (content[pos] == '}') braceCount--;
+                    pos++;
+                }
+                value = content.substr(objStart, pos - objStart);
+            } else if (content[pos] == '[') {
+                // Array value
+                size_t arrStart = pos;
+                bracketCount = 1;
+                pos++;
+                while (pos < content.length() && bracketCount > 0) {
+                    if (content[pos] == '[') bracketCount++;
+                    else if (content[pos] == ']') bracketCount--;
+                    pos++;
+                }
+                value = content.substr(arrStart, pos - arrStart);
+            } else {
+                // Number, boolean, or null
+                size_t valueStart = pos;
+                while (pos < content.length() && content[pos] != ',' && content[pos] != '}') {
+                    pos++;
+                }
+                value = content.substr(valueStart, pos - valueStart);
+                // Trim whitespace
+                size_t valueEnd = value.find_last_not_of(" \t\n\r");
+                if (valueEnd != std::string::npos) {
+                    value = value.substr(0, valueEnd + 1);
+                }
+            }
+        }
+
+        if (!key.empty()) {
+            result[key] = value;
+        }
+
+        // Skip to next pair (skip comma)
+        while (pos < content.length() && (std::isspace(content[pos]) || content[pos] == ',')) pos++;
+    }
+
+    return result;
+}
+
 // ============================================================================
 // JsonValue Implementation
 // ============================================================================
@@ -809,29 +928,60 @@ JsonValue Agent::executeToolInternal(const std::string& toolName,
     logger_.log("Executing tool: " + toolName + " with args: " + argsJson.str(), "TOOL");
 
     if (toolName == "read_file") {
-        return fileTools_.readFile(arguments.at("file_path"));
+        auto it = arguments.find("file_path");
+        if (it == arguments.end()) {
+            JsonValue error;
+            error.bools["success"] = false;
+            error.strings["error"] = "Missing required argument: file_path";
+            return error;
+        }
+        return fileTools_.readFile(it->second);
     } else if (toolName == "write_file") {
-        return fileTools_.writeFile(arguments.at("file_path"), arguments.at("content"));
+        auto filePathIt = arguments.find("file_path");
+        auto contentIt = arguments.find("content");
+        if (filePathIt == arguments.end() || contentIt == arguments.end()) {
+            JsonValue error;
+            error.bools["success"] = false;
+            error.strings["error"] = "Missing required arguments for write_file";
+            return error;
+        }
+        return fileTools_.writeFile(filePathIt->second, contentIt->second);
     } else if (toolName == "edit_file") {
-        return fileTools_.editFile(arguments.at("file_path"),
-                                   arguments.at("old_string"),
-                                   arguments.at("new_string"));
+        auto filePathIt = arguments.find("file_path");
+        auto oldStringIt = arguments.find("old_string");
+        auto newStringIt = arguments.find("new_string");
+        if (filePathIt == arguments.end() || oldStringIt == arguments.end() || newStringIt == arguments.end()) {
+            JsonValue error;
+            error.bools["success"] = false;
+            error.strings["error"] = "Missing required arguments for edit_file";
+            return error;
+        }
+        return fileTools_.editFile(filePathIt->second, oldStringIt->second, newStringIt->second);
     } else if (toolName == "list_files") {
         std::string directory = ".";
         auto it = arguments.find("directory");
-        if (it != arguments.end()) {
+        if (it != arguments.end() && !it->second.empty()) {
             directory = it->second;
         }
         return fileTools_.listFiles(directory);
     } else if (toolName == "run_command") {
-        int timeout = 30;
-        auto it = arguments.find("timeout");
-        if (it != arguments.end()) {
-            try {
-                timeout = std::stoi(it->second);
-            } catch (...) {}
+        auto commandIt = arguments.find("command");
+        if (commandIt == arguments.end()) {
+            JsonValue error;
+            error.bools["success"] = false;
+            error.strings["error"] = "Missing required argument: command";
+            return error;
         }
-        return shellTools_.runCommand(arguments.at("command"), timeout);
+        int timeout = 30;
+        auto timeoutIt = arguments.find("timeout");
+        if (timeoutIt != arguments.end()) {
+            try {
+                timeout = std::stoi(timeoutIt->second);
+            } catch (...) {
+                timeout = 30;
+            }
+        }
+        return shellTools_.runCommand(commandIt->second, timeout);
     } else {
         JsonValue result;
         result.bools["success"] = false;
@@ -888,17 +1038,8 @@ std::vector<ToolCall> Agent::parseToolCalls(const std::string& responseJson) con
 
         std::string argumentsStr = JsonParser::extractString(functionJson, "arguments");
 
-        size_t pos = 0;
-        std::string key, value;
-        while (JsonParser::findString(argumentsStr, pos, "", value)) {
-            size_t keyStart = argumentsStr.rfind('\"', pos - value.length() - 3);
-            if (keyStart != std::string::npos) {
-                keyStart++;
-                size_t keyEnd = argumentsStr.find('\"', keyStart);
-                key = argumentsStr.substr(keyStart, keyEnd - keyStart);
-                tc.arguments[key] = value;
-            }
-        }
+        // Parse the arguments JSON string into key-value pairs
+        tc.arguments = JsonParser::parseJsonObject(argumentsStr);
 
         if (!tc.id.empty() && !tc.name.empty()) {
             toolCalls.push_back(tc);
