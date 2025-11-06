@@ -334,7 +334,7 @@ class CodeAgent:
             "content": user_message
         })
 
-        max_iterations = 10  # Prevent infinite loops
+        max_iterations = 99  # Prevent infinite loops
         iteration = 0
 
         while iteration < max_iterations:
